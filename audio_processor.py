@@ -5,7 +5,6 @@ import scipy.ndimage as ndimage
 
 def extract_fingerprint(file_path):
     """Loads audio, generates spectrogram, finds peaks, and creates hashes."""
-    # Load audio
     try:
         # sr=None preserves the original sample rate of the mp3/wav
         audio, sr = librosa.load(file_path, sr=None, mono=True)
@@ -22,17 +21,16 @@ def extract_fingerprint(file_path):
     neighborhood_size = 20
     local_max = ndimage.maximum_filter(Sxx_db, size=neighborhood_size) == Sxx_db
     
-    # Only keep the top 5% brightest peaks to ignore background noise
     threshold = np.percentile(Sxx_db, 95)
     peaks = (local_max) & (Sxx_db > threshold)
 
     peak_freq_indices, peak_time_indices = np.where(peaks)
     
     # 3. Generate Hashes
-    fan_out = 5
+    # INCREASED FAN-OUT: Pairs each peak with the next 15 peaks instead of 5
+    fan_out = 15 
     hashes = []
     
-    # Sort peaks by time to ensure we only pair forward in time
     sort_idx = np.argsort(peak_time_indices)
     t_idx_sorted = peak_time_indices[sort_idx]
     f_idx_sorted = peak_freq_indices[sort_idx]
@@ -43,9 +41,8 @@ def extract_fingerprint(file_path):
             t2, f2 = int(t_idx_sorted[i+j]), int(f_idx_sorted[i+j])
             time_delta = t2 - t1
             
-            # Pair peaks that are close, but not too far apart
-            if 0 < time_delta < 50:
-                # Create a string key for easy JSON storage: "freq1_freq2_timedelta"
+            # INCREASED DELTA ALLOWANCE: Allow peaks up to 200 bins apart
+            if 0 < time_delta < 200:
                 hash_key = f"{f1}_{f2}_{time_delta}"
                 hashes.append([hash_key, t1])
                 

@@ -11,28 +11,12 @@ from audio_processor import extract_fingerprint
 # ==========================================
 st.set_page_config(page_title="Zapptain America", page_icon="🎧", layout="wide", initial_sidebar_state="expanded")
 
-# Custom CSS for a sleeker look
 st.markdown("""
     <style>
-    /* Style the main metric box */
-    [data-testid="stMetricValue"] {
-        font-size: 2.5rem !important;
-        color: #1DB954 !important; /* Spotify Green */
-    }
-    /* Style the upload box */
-    .stFileUploader {
-        border-radius: 15px;
-        padding: 10px;
-    }
-    /* Style buttons */
-    .stButton>button {
-        border-radius: 20px;
-        font-weight: bold;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        transform: scale(1.02);
-    }
+    [data-testid="stMetricValue"] { font-size: 2.5rem !important; color: #1DB954 !important; }
+    .stFileUploader { border-radius: 15px; padding: 10px; }
+    .stButton>button { border-radius: 20px; font-weight: bold; transition: all 0.3s ease; }
+    .stButton>button:hover { transform: scale(1.02); }
     </style>
 """, unsafe_allow_html=True)
 
@@ -50,10 +34,13 @@ def load_database():
 db = load_database()
 
 def identify_song(query_hashes, database):
-    """Upgraded to return a confidence score (raw hash matches)"""
-    best_match = "Unknown Song"
+    """Matches hashes and enforces a minimum confidence threshold."""
+    best_match = "No match found"
     highest_score = 0
     best_histogram = []
+    
+    # NEW: Reject random coincidences. Require at least 15 aligned hashes.
+    MIN_MATCH_THRESHOLD = 15 
 
     for song_name, db_hashes in database.items():
         db_dict = {}
@@ -77,25 +64,25 @@ def identify_song(query_hashes, database):
                 best_match = song_name
                 best_histogram = offsets
 
-    return best_match, best_histogram, highest_score
+    if highest_score >= MIN_MATCH_THRESHOLD:
+        return best_match, best_histogram, highest_score
+    else:
+        return "Unknown Song (Confidence too low)", best_histogram, highest_score
 
 # ==========================================
 # SIDEBAR NAVIGATION
 # ==========================================
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3659/3659784.png", width=100) # Generic sound wave icon
+    st.image("https://cdn-icons-png.flaticon.com/512/3659/3659784.png", width=100) 
     st.title("Zapptain America")
-    st.caption("v2.0 - Audio Fingerprinting Engine")
+    st.caption("v2.1 - Enhanced Audio Fingerprinting")
     st.divider()
-    
-    # Use radio buttons for navigation instead of tabs
     app_mode = st.radio("Navigation", ["🔍 Single-Clip Mode", "📂 Batch Processing Mode"])
-    
     st.divider()
     st.success(f"📦 Database Loaded: **{len(db)} songs** indexed.")
 
 if not db:
-    st.error("⚠️ database.json not found! Please ensure your database is built and located in the main directory.")
+    st.error("⚠️ database.json not found! Please build your database first.")
     st.stop()
 
 # ==========================================
@@ -103,12 +90,11 @@ if not db:
 # ==========================================
 if app_mode == "🔍 Single-Clip Mode":
     st.header("Audio Identification Engine")
-    st.write("Upload a noisy or clean audio snippet. The system will extract spectral hashes and find the best match.")
+    st.write("Upload an audio snippet. The system requires at least 15 aligned hashes to confirm a match.")
     
     uploaded_file = st.file_uploader("Drop an audio file here (.mp3, .wav)", type=['mp3', 'wav'])
 
     if uploaded_file is not None:
-        # Create two columns for the top section
         top_col1, top_col2 = st.columns([1, 2])
         
         with top_col1:
@@ -129,18 +115,16 @@ if app_mode == "🔍 Single-Clip Mode":
                 else:
                     match_name, histogram, score = identify_song(query_hashes, db)
                     
-                    # Display results in a highly visible metric card
                     with top_col2:
-                        st.metric(label="Identification Result", value=match_name, delta=f"{score} aligned hashes")
+                        if score >= 15:
+                            st.metric(label="Identification Result", value=match_name, delta=f"{score} aligned hashes")
+                        else:
+                            st.metric(label="Identification Result", value=match_name, delta=f"Only {score} hashes (Failed)", delta_color="inverse")
 
                     st.divider()
-                    
-                    # Group diagnostic visuals inside an expander to keep the UI clean
                     st.subheader("Diagnostic Telemetry")
                     with st.expander("View Spectral Analysis & Match Data", expanded=True):
                         col1, col2 = st.columns(2)
-                        
-                        # Set matplotlib style to a darker theme to match the app
                         plt.style.use('dark_background')
                         
                         with col1:
@@ -150,7 +134,6 @@ if app_mode == "🔍 Single-Clip Mode":
                             ax1.set_title("Spectrogram & Peak Constellation")
                             ax1.set_ylabel("Frequency (Hz)")
                             ax1.set_xlabel("Time (s)")
-                            # Format plot to look modern
                             ax1.grid(False)
                             fig1.patch.set_alpha(0.0)
                             ax1.patch.set_alpha(0.0)
@@ -178,13 +161,9 @@ elif app_mode == "📂 Batch Processing Mode":
 
     if batch_files and st.button("⚙️ Process Batch", type="primary"):
         results = []
-        
-        # Use Streamlit's built-in progress components
-        progress_text = "Processing files. Please wait."
-        my_bar = st.progress(0, text=progress_text)
+        my_bar = st.progress(0, text="Processing files. Please wait.")
         
         for idx, b_file in enumerate(batch_files):
-            # Update progress bar
             my_bar.progress((idx) / len(batch_files), text=f"Processing {b_file.name}...")
             
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
@@ -210,8 +189,6 @@ elif app_mode == "📂 Batch Processing Mode":
         csv_data = df.to_csv(index=False).encode('utf-8')
         
         st.success(f"Successfully processed {len(results)} files.")
-        
-        # Show data cleanly
         st.dataframe(df, use_container_width=True)
         
         st.download_button(
