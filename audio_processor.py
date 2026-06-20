@@ -6,8 +6,6 @@ import scipy.ndimage as ndimage
 def extract_fingerprint(file_path):
     """Loads audio, generates spectrogram, finds peaks, and creates hashes."""
     try:
-        # 🚨 CRITICAL FIX: Force a standard sample rate (22050 Hz)
-        # This ensures WhatsApp notes and high-res MP3s generate identical frequency bins!
         audio, sr = librosa.load(file_path, sr=22050, mono=True)
     except Exception as e:
         print(f"Error loading {file_path}: {e}")
@@ -22,8 +20,10 @@ def extract_fingerprint(file_path):
     neighborhood_size = 20
     local_max = ndimage.maximum_filter(Sxx_db, size=neighborhood_size) == Sxx_db
     
-    # 🚨 FIX 2: Lowered threshold to 90 to capture more peaks in noisy/compressed recordings
-    threshold = np.percentile(Sxx_db, 90)
+    # 🚨 CORRECTED: Volume & Length Invariant Threshold
+    # Using np.max() ensures that short query clips generate the exact same 
+    # peaks as the full database songs, regardless of clip length or overall volume.
+    threshold = np.max(Sxx_db) - 35 
     peaks = (local_max) & (Sxx_db > threshold)
 
     peak_freq_indices, peak_time_indices = np.where(peaks)

@@ -4,6 +4,7 @@ import tempfile
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import pathlib  # Added to handle file extensions properly
 from audio_processor import extract_fingerprint
 
 # ==========================================
@@ -34,12 +35,10 @@ def load_database():
 db = load_database()
 
 def identify_song(query_hashes, database):
-    """Matches hashes and enforces a minimum confidence threshold."""
     best_match = "No match found"
     highest_score = 0
     best_histogram = []
     
-    # NEW: Reject random coincidences. Require at least 15 aligned hashes.
     MIN_MATCH_THRESHOLD = 15 
 
     for song_name, db_hashes in database.items():
@@ -75,7 +74,7 @@ def identify_song(query_hashes, database):
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/3659/3659784.png", width=100) 
     st.title("Zapptain America")
-    st.caption("v2.1 - Enhanced Audio Fingerprinting")
+    st.caption("v2.2 - Robust Audio Fingerprinting")
     st.divider()
     app_mode = st.radio("Navigation", ["🔍 Single-Clip Mode", "📂 Batch Processing Mode"])
     st.divider()
@@ -103,7 +102,9 @@ if app_mode == "🔍 Single-Clip Mode":
             
         if analyze_button:
             with st.spinner("Extracting frequencies and matching hashes..."):
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
+                # 🚨 CORRECTED: Dynamically fetch the correct file extension
+                file_ext = pathlib.Path(uploaded_file.name).suffix
+                with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
                     tmp_file.write(uploaded_file.getvalue())
                     tmp_path = tmp_file.name
 
@@ -166,7 +167,9 @@ elif app_mode == "📂 Batch Processing Mode":
         for idx, b_file in enumerate(batch_files):
             my_bar.progress((idx) / len(batch_files), text=f"Processing {b_file.name}...")
             
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp_file:
+            # 🚨 CORRECTED: Dynamically fetch the correct file extension
+            file_ext = pathlib.Path(b_file.name).suffix
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
                 tmp_file.write(b_file.getvalue())
                 tmp_path = tmp_file.name
                 
